@@ -40,6 +40,7 @@ import (
 	"k8s.io/utils/clock"
 
 	"github.com/jetstack/cert-manager/cmd/controller/app/options"
+	"github.com/jetstack/cert-manager/pkg/acme/accounts"
 	clientset "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
 	intscheme "github.com/jetstack/cert-manager/pkg/client/clientset/versioned/scheme"
 	informers "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
@@ -73,14 +74,13 @@ func Run(opts *options.ControllerOptions, stopCh <-chan struct{}) {
 		os.Exit(1)
 	}
 
+	metricsServer, err := ctx.Metrics.Start(opts.MetricsListenAddress)
+	if err != nil {
+		log.Error(err, "failed to listen on prometheus address", "address", opts.MetricsListenAddress)
+		os.Exit(1)
+	}
+
 	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		metrics.Default.Start(stopCh)
-	}()
-
 	var experimentalCertificateControllers = []string{
 		trigger.ControllerName,
 		issuing.ControllerName,
@@ -145,6 +145,7 @@ func Run(opts *options.ControllerOptions, stopCh <-chan struct{}) {
 		ctx.KubeSharedInformerFactory.Start(stopCh)
 		wg.Wait()
 		log.Info("control loops exited")
+		ctx.Metrics.Shutdown(metricsServer)
 		os.Exit(0)
 	}
 
@@ -224,6 +225,9 @@ func buildControllerContext(ctx context.Context, stopCh <-chan struct{}, opts *o
 
 	sharedInformerFactory := informers.NewSharedInformerFactoryWithOptions(intcl, time.Second*30, informers.WithNamespace(opts.Namespace))
 	kubeSharedInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(cl, time.Second*30, kubeinformers.WithNamespace(opts.Namespace))
+
+	acmeAccountRegistry := accounts.NewDefaultRegistry()
+
 	return &controller.Context{
 		RootContext:               ctx,
 		StopCh:                    stopCh,
@@ -235,6 +239,7 @@ func buildControllerContext(ctx context.Context, stopCh <-chan struct{}, opts *o
 		SharedInformerFactory:     sharedInformerFactory,
 		Namespace:                 opts.Namespace,
 		Clock:                     clock.RealClock{},
+		Metrics:                   metrics.New(log),
 		ACMEOptions: controller.ACMEOptions{
 			HTTP01SolverImage:                 opts.ACMEHTTP01SolverImage,
 			HTTP01SolverResourceRequestCPU:    HTTP01SolverResourceRequestCPU,
@@ -243,6 +248,7 @@ func buildControllerContext(ctx context.Context, stopCh <-chan struct{}, opts *o
 			HTTP01SolverResourceLimitsMemory:  HTTP01SolverResourceLimitsMemory,
 			DNS01CheckAuthoritative:           !opts.DNS01RecursiveNameserversOnly,
 			DNS01Nameservers:                  nameservers,
+			AccountRegistry:                   acmeAccountRegistry,
 		},
 		IssuerOptions: controller.IssuerOptions{
 			ClusterIssuerAmbientCredentials: opts.ClusterIssuerAmbientCredentials,

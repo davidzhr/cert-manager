@@ -35,14 +35,11 @@ import (
 	acmecl "github.com/jetstack/cert-manager/pkg/acme/client"
 	cmacme "github.com/jetstack/cert-manager/pkg/apis/acme/v1alpha2"
 	logf "github.com/jetstack/cert-manager/pkg/logs"
-	"github.com/jetstack/cert-manager/pkg/metrics"
 )
 
 func (c *controller) Sync(ctx context.Context, o *cmacme.Order) (err error) {
 	log := logf.FromContext(ctx)
 	dbg := log.V(logf.DebugLevel)
-
-	metrics.Default.IncrementSyncCallCount(ControllerName)
 
 	oldOrder := o
 	o = o.DeepCopy()
@@ -67,7 +64,7 @@ func (c *controller) Sync(ctx context.Context, o *cmacme.Order) (err error) {
 	if err != nil {
 		return fmt.Errorf("error reading (cluster)issuer %q: %v", o.Spec.IssuerRef.Name, err)
 	}
-	cl, err := c.acmeHelper.ClientForIssuer(genericIssuer)
+	cl, err := c.accountRegistry.GetClient(string(genericIssuer.GetUID()))
 	if err != nil {
 		return err
 	}
@@ -239,9 +236,10 @@ func (c *controller) updateOrderStatus(ctx context.Context, cl acmecl.Interface,
 	}
 	o.Status.FinalizeURL = acmeOrder.FinalizeURL
 	c.setOrderState(&o.Status, acmeOrder.Status)
-	// only set the authorizations field if the lengths mismatch.
-	// state can be rebuilt in this case on the next call to ProcessItem.
-	if len(o.Status.Authorizations) != len(acmeOrder.AuthzURLs) {
+	// once the 'authorizations' slice contains at least one item, it cannot be
+	// updated. If it does not contain any items, update it containing the list
+	// of authorizations returned on the Order.
+	if len(o.Status.Authorizations) == 0 {
 		o.Status.Authorizations = constructAuthorizations(acmeOrder)
 	}
 
@@ -303,6 +301,7 @@ func (c *controller) fetchMetadataForAuthorizations(ctx context.Context, o *cmac
 			return err
 		}
 
+		authz.InitialState = cmacme.State(acmeAuthz.Status)
 		authz.Identifier = acmeAuthz.Identifier.Value
 		authz.Wildcard = &acmeAuthz.Wildcard
 		authz.Challenges = make([]cmacme.ACMEChallenge, len(acmeAuthz.Challenges))

@@ -40,7 +40,7 @@ spec:
 {{ toYaml .Values.cainjector.podAnnotations | indent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "cainjector.fullname" . }}
+      serviceAccountName: {{ template "cainjector.serviceAccountName" . }}
       {{- if .Values.global.priorityClassName }}
       priorityClassName: {{ .Values.global.priorityClassName | quote }}
       {{- end }}
@@ -65,6 +65,10 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          {{- if .Values.cainjector.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.cainjector.containerSecurityContext | nindent 12 }}
+          {{- end }}
           resources:
 {{ toYaml .Values.cainjector.resources | indent 12 }}
     {{- with .Values.cainjector.nodeSelector }}

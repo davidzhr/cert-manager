@@ -27,8 +27,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
 
+	"github.com/jetstack/cert-manager/pkg/acme/accounts"
 	clientset "github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
 	informers "github.com/jetstack/cert-manager/pkg/client/informers/externalversions"
+	"github.com/jetstack/cert-manager/pkg/metrics"
 )
 
 // Context contains various types that are used by controller implementations.
@@ -65,6 +67,9 @@ type Context struct {
 	// Clock should be used to access the current time instead of relying on
 	// time.Now, to make it easier to test controllers that utilise time
 	Clock clock.Clock
+
+	// Metrics is used for exposing Prometheus metrics across the controllers
+	Metrics *metrics.Metrics
 
 	IssuerOptions
 	ACMEOptions
@@ -117,6 +122,10 @@ type ACMEOptions struct {
 	// DNS01Nameservers is a list of nameservers to use when performing self-checks
 	// for ACME DNS01 validations.
 	DNS01Nameservers []string
+
+	// AccountRegistry is used as a cache of ACME accounts between various
+	// components of cert-manager
+	AccountRegistry accounts.Registry
 }
 
 type IngressShimOptions struct {

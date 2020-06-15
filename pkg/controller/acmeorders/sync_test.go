@@ -27,10 +27,9 @@ import (
 	coretesting "k8s.io/client-go/testing"
 	fakeclock "k8s.io/utils/clock/testing"
 
+	accountstest "github.com/jetstack/cert-manager/pkg/acme/accounts/test"
 	acmecl "github.com/jetstack/cert-manager/pkg/acme/client"
-	acmefake "github.com/jetstack/cert-manager/pkg/acme/fake"
 	cmacme "github.com/jetstack/cert-manager/pkg/apis/acme/v1alpha2"
-	"github.com/jetstack/cert-manager/pkg/apis/certmanager/v1alpha2"
 	cmmeta "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
 	testpkg "github.com/jetstack/cert-manager/pkg/controller/test"
 	"github.com/jetstack/cert-manager/test/unit/gen"
@@ -200,6 +199,111 @@ dGVzdA==
 				},
 			},
 		},
+		// TODO: we should improve this behaviour as this is the 'stuck order' problem described in:
+		//  https://github.com/jetstack/cert-manager/issues/2868
+		"skip creating a Challenge for an already valid authorization, and do nothing if the order is pending": {
+			order: gen.OrderFrom(testOrder, gen.SetOrderStatus(
+				cmacme.OrderStatus{
+					State:       cmacme.Pending,
+					URL:         "http://testurl.com/abcde",
+					FinalizeURL: "http://testurl.com/abcde/finalize",
+					Authorizations: []cmacme.ACMEAuthorization{
+						{
+							URL:          "http://authzurl",
+							Identifier:   "test.com",
+							InitialState: cmacme.Valid,
+							Challenges: []cmacme.ACMEChallenge{
+								{
+									URL:   "http://chalurl",
+									Token: "token",
+									Type:  cmacme.ACMEChallengeTypeHTTP01,
+								},
+							},
+						},
+					},
+				},
+			)),
+			builder: &testpkg.Builder{
+				CertManagerObjects: []runtime.Object{testIssuerHTTP01TestCom, testOrderPending},
+				ExpectedActions:    []testpkg.Action{},
+				ExpectedEvents:     []string{},
+			},
+			acmeClient: &acmecl.FakeACME{
+				FakeGetOrder: func(ctx context.Context, url string) (*acmeapi.Order, error) {
+					return &acmeapi.Order{
+						URI:         "http://testurl.com/abcde",
+						Status:      acmeapi.StatusPending,
+						FinalizeURL: "http://testurl.com/abcde/finalize",
+						CertURL:     "",
+					}, nil
+				},
+			},
+		},
+		"skip creating a Challenge for an already valid authorization": {
+			order: gen.OrderFrom(testOrder, gen.SetOrderStatus(
+				cmacme.OrderStatus{
+					State:       cmacme.Pending,
+					URL:         "http://testurl.com/abcde",
+					FinalizeURL: "http://testurl.com/abcde/finalize",
+					Authorizations: []cmacme.ACMEAuthorization{
+						{
+							URL:          "http://authzurl",
+							Identifier:   "test.com",
+							InitialState: cmacme.Valid,
+							Challenges: []cmacme.ACMEChallenge{
+								{
+									URL:   "http://chalurl",
+									Token: "token",
+									Type:  cmacme.ACMEChallengeTypeHTTP01,
+								},
+							},
+						},
+					},
+				},
+			)),
+			builder: &testpkg.Builder{
+				CertManagerObjects: []runtime.Object{testIssuerHTTP01TestCom, testOrderPending},
+				ExpectedActions: []testpkg.Action{
+					testpkg.NewAction(coretesting.NewUpdateSubresourceAction(cmacme.SchemeGroupVersion.WithResource("orders"),
+						"status",
+						testOrder.Namespace, gen.OrderFrom(testOrder, gen.SetOrderStatus(
+							cmacme.OrderStatus{
+								// The 'state' field should be updated to reflect the
+								// Order returned by FakeGetOrder
+								State:       cmacme.Valid,
+								URL:         "http://testurl.com/abcde",
+								FinalizeURL: "http://testurl.com/abcde/finalize",
+								Authorizations: []cmacme.ACMEAuthorization{
+									{
+										URL:          "http://authzurl",
+										Identifier:   "test.com",
+										InitialState: cmacme.Valid,
+										Challenges: []cmacme.ACMEChallenge{
+											{
+												URL:   "http://chalurl",
+												Token: "token",
+												Type:  cmacme.ACMEChallengeTypeHTTP01,
+											},
+										},
+									},
+								},
+							},
+						)),
+					)),
+				},
+				ExpectedEvents: []string{},
+			},
+			acmeClient: &acmecl.FakeACME{
+				FakeGetOrder: func(ctx context.Context, url string) (*acmeapi.Order, error) {
+					return &acmeapi.Order{
+						URI:         "http://testurl.com/abcde",
+						Status:      acmeapi.StatusValid,
+						FinalizeURL: "http://testurl.com/abcde/finalize",
+						CertURL:     "",
+					}, nil
+				},
+			},
+		},
 		"do nothing if the challenge for test.com is still pending": {
 			order: testOrderPending,
 			builder: &testpkg.Builder{
@@ -340,8 +444,8 @@ func runTest(t *testing.T, test testT) {
 
 	c := &controller{}
 	c.Register(test.builder.Context)
-	c.acmeHelper = &acmefake.Helper{
-		ClientForIssuerFunc: func(iss v1alpha2.GenericIssuer) (acmecl.Interface, error) {
+	c.accountRegistry = &accountstest.FakeRegistry{
+		GetClientFunc: func(_ string) (acmecl.Interface, error) {
 			return test.acmeClient, nil
 		},
 	}

@@ -91,6 +91,16 @@ securityContext: {}
 #   runAsUser: 1000
 #   runAsNonRoot: true
 
+# Container Security Context to be set on the controller component container
+# ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+containerSecurityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+
+
 volumes: []
 
 volumeMounts: []
@@ -102,6 +112,7 @@ volumeMounts: []
 # podAnnotations: {}
 
 podLabels: {}
+
 # Optional DNS settings, useful if you have a public and private DNS zone for
 # the same domain on Route 53. What follows is an example of ensuring
 # cert-manager can access an ingress or DNS TXT records at all times.
@@ -169,6 +180,15 @@ webhook:
 
   securityContext: {}
 
+  # Container Security Context to be set on the webhook component container
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  containerSecurityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+
   # Optional additional annotations to add to the webhook Deployment
   # deploymentAnnotations: {}
 
@@ -196,6 +216,15 @@ webhook:
     # tag: canary
     pullPolicy: IfNotPresent
 
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    # name: ""
+    # Optional additional annotations to add to the controller's ServiceAccount
+    # annotations: {}
+
   # The port that the webhook should listen on for requests.
   # In GKE private clusters, by default kubernetes apiservers are allowed to
   # talk to the cluster nodes only on 443 and 10250. so configuring
@@ -214,6 +243,16 @@ cainjector:
     #   maxUnavailable: 1
 
   securityContext: {}
+
+  # Container Security Context to be set on the cainjector component container
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  containerSecurityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+
 
   # Optional additional annotations to add to the cainjector Deployment
   # deploymentAnnotations: {}
@@ -241,3 +280,12 @@ cainjector:
     # If no value is set, the chart's appVersion will be used.
     # tag: canary
     pullPolicy: IfNotPresent
+
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    # name: ""
+    # Optional additional annotations to add to the controller's ServiceAccount
+    # annotations: {}

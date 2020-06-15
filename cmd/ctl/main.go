@@ -17,19 +17,17 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
-	"github.com/jetstack/cert-manager/pkg/util/cmd"
+	ctlcmd "github.com/jetstack/cert-manager/cmd/ctl/cmd"
+	utilcmd "github.com/jetstack/cert-manager/pkg/util/cmd"
 )
 
 func main() {
-	stopCh := cmd.SetupSignalHandler()
-	cmd := NewCertManagerCtlCommand(os.Stdin, os.Stdout, os.Stderr, stopCh)
-	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+	stopCh := utilcmd.SetupSignalHandler()
+	cmd := ctlcmd.NewCertManagerCtlCommand(os.Stdin, os.Stdout, os.Stderr, stopCh)
 
-	flag.CommandLine.Parse([]string{})
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}

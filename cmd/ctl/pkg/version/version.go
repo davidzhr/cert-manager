@@ -21,11 +21,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jetstack/cert-manager/pkg/util"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/yaml"
+
+	"github.com/jetstack/cert-manager/pkg/util"
 )
 
 // Options is a struct to support version command
@@ -53,8 +54,8 @@ func NewCmdVersion(ioStreams genericclioptions.IOStreams) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print the cert-manager-ctl version",
-		Long:  "Print the cert-manager-ctl version",
+		Short: "Print the kubectl cert-manager version",
+		Long:  "Print the kubectl cert-manager version",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(o.Validate())
 			cmdutil.CheckErr(o.Run())
